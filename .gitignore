@@ -1,2 +1,7 @@
 .venv
+<<<<<<< HEAD
 .venv/
+=======
+.venv/
+serviceAccount.json
+>>>>>>> 1694ce8 (Created firestore database and connected via service account)

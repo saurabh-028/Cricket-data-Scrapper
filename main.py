@@ -5,6 +5,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import pandas as pd
 import requests
+<<<<<<< HEAD
 import sqlite3
 from datetime import datetime
 
@@ -46,6 +47,20 @@ def setup_database():
     
     conn.commit()
     return conn
+=======
+from datetime import datetime
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
+# Setting up Firebase Admin SDK
+cred = credentials.Certificate("serviceAccount.json")
+
+app = firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+>>>>>>> 1694ce8 (Created firestore database and connected via service account)
+
 
 def get_cricbuzz_commentary(match_id, inning):
     url = f'https://www.cricbuzz.com/api/cricket-match/{match_id}/full-commentary/{inning}'
