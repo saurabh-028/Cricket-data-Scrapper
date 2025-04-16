@@ -3,3 +3,4 @@ webdriver-manager==4.0.2
 firebase-admin==6.7.0
 requests==2.32.3
 pandas==2.2.3
+tqdm==4.65.0
