@@ -5,62 +5,19 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import pandas as pd
 import requests
-<<<<<<< HEAD
-import sqlite3
-from datetime import datetime
 
-def setup_database():
-    conn = sqlite3.connect('ipl_commentary.db')
-    cursor = conn.cursor()
-    
-    # Create matches table
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS matches (
-        match_id INTEGER PRIMARY KEY,
-        season INTEGER,
-        match_name TEXT,
-        series_name TEXT,
-        venue TEXT,
-        date_time TEXT,
-        status TEXT DEFAULT 'pending'
-    )
-    ''')
-    
-    # Create commentary table 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS commentary (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        match_id INTEGER,
-        inningsId INTEGER,
-        commText TEXT,
-        timestamp TEXT,
-        ballNbr TEXT,
-        event TEXT,
-        batTeamName TEXT,
-        batsmanStrikerName TEXT,
-        batsmanStrikerRuns INTEGER,
-        bowlerStrikerName TEXT,
-        batTeamScore TEXT,
-        FOREIGN KEY (match_id) REFERENCES matches(match_id)
-    )
-    ''')
-    
-    conn.commit()
-    return conn
-=======
 from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 # Setting up Firebase Admin SDK
 cred = credentials.Certificate("serviceAccount.json")
-
 app = firebase_admin.initialize_app(cred)
-
 db = firestore.client()
->>>>>>> 1694ce8 (Created firestore database and connected via service account)
-
 
 def get_cricbuzz_commentary(match_id, inning):
     url = f'https://www.cricbuzz.com/api/cricket-match/{match_id}/full-commentary/{inning}'
@@ -68,25 +25,27 @@ def get_cricbuzz_commentary(match_id, inning):
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json().get('commentary', [])
+        else:
+            print(f"API request failed with status code: {response.status_code}")
+            return None
     except Exception as e:
         print(f"Error fetching commentary: {e}")
         return None
 
-def process_match(match_url, season, conn):
-    cursor = conn.cursor()
+def process_match(match_url, season):
     match_id = match_url.split('/')[-2]
-    
+    match_ref = db.collection('matches').document(match_id)
+
     try:
         # Check if match already exists
-        cursor.execute("SELECT 1 FROM matches WHERE match_id = ?", (match_id,))
-        if cursor.fetchone():
+        if match_ref.get().exists:
             print(f"Match {match_id} exists, skipping")
             return True
 
         # Navigate to match page
         driver.get(match_url)
         time.sleep(3)
-        
+
         # Get match info
         try:
             match_name = driver.find_element(By.CSS_SELECTOR, "h1.cb-nav-hdr").text.split('-')[0].strip()
@@ -97,12 +56,17 @@ def process_match(match_url, season, conn):
             print(f"Error getting match info: {e}")
             return False
 
-        # Insert match info
-        cursor.execute('''
-        INSERT INTO matches (match_id, season, match_name, series_name, venue, date_time, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)''', 
-        (match_id, season, match_name, series_name, venue, date_time, 'processing'))
-        conn.commit()
+        # Store match info in Firestore
+        match_data = {
+            'match_id': match_id,
+            'season': season,
+            'match_name': match_name,
+            'series_name': series_name,
+            'venue': venue,
+            'date_time': date_time,
+            'status': 'processing'
+        }
+        match_ref.set(match_data)
 
         # Get commentary data
         commentary_data = []
@@ -111,7 +75,6 @@ def process_match(match_url, season, conn):
             if data:
                 for comm in data[0].get('commentaryList', []):
                     commentary_data.append({
-                        'match_id': match_id,
                         'inningsId': comm.get('inningsId'),
                         'commText': comm.get('commText'),
                         'timestamp': comm.get('timestamp'),
@@ -125,36 +88,49 @@ def process_match(match_url, season, conn):
                     })
 
         if commentary_data:
-            pd.DataFrame(commentary_data).to_sql('commentary', conn, if_exists='append', index=False)
-            cursor.execute("UPDATE matches SET status = 'completed' WHERE match_id = ?", (match_id,))
-            conn.commit()
+            # Add commentary data to a subcollection
+            commentary_ref = match_ref.collection('commentary')
+            batch = db.batch()
+            for entry in commentary_data:
+                doc_ref = commentary_ref.document()
+                batch.set(doc_ref, entry)
+            
+            # Commit the batch
+            batch.commit()
+
+            # Update match status
+            match_ref.update({'status': 'completed'})
             print(f"Successfully processed match {match_id}")
             return True
         else:
-            cursor.execute("UPDATE matches SET status = 'failed' WHERE match_id = ?", (match_id,))
-            conn.commit()
+            match_ref.update({'status': 'failed', 'reason': 'No commentary data'})
             print(f"No commentary data for match {match_id}")
             return False
 
     except Exception as e:
         print(f"Error processing match {match_id}: {e}")
-        cursor.execute("UPDATE matches SET status = 'failed' WHERE match_id = ?", (match_id,))
-        conn.commit()
+        match_ref.update({'status': 'failed', 'reason': str(e)})
         return False
 
-def process_season(season_year, conn):
+def process_season(season_year):
     print(f"\nProcessing season: {season_year}")
     
     try:
         # Navigate to season page
         driver.get(f"https://www.cricbuzz.com/cricket-scorecard-archives/{season_year}")
-        time.sleep(3)
+        time.sleep(10)
         
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".cb-srs-lst-itm"))
+        )
         # Find IPL series
         series_links = driver.find_elements(By.CSS_SELECTOR, ".cb-srs-lst-itm a")
         ipl_link = None
+        print(f"Found {len(series_links)} series links")
+        
         
         for link in series_links:
+            print(link.text)
             if "Indian Premier League" in link.text:
                 ipl_link = link.get_attribute('href')
                 break
@@ -165,17 +141,20 @@ def process_season(season_year, conn):
             
         # Get all match URLs from series page
         driver.get(ipl_link)
-        time.sleep(3)
+        time.sleep(10)
         match_elements = driver.find_elements(By.CSS_SELECTOR, ".cb-series-matches a.text-hvr-underline")
         match_urls = [elem.get_attribute('href') for elem in match_elements]
         
         print(f"Found {len(match_urls)} matches for IPL {season_year}")
         
         # Process each match
+        success_count = 0
         for i, url in enumerate(match_urls, 1):
             print(f"\nProcessing match {i}/{len(match_urls)}")
-            process_match(url, season_year, conn)
-            
+            if process_match(url, season_year):
+                success_count += 1
+                
+        print(f"Successfully processed {success_count}/{len(match_urls)} matches for season {season_year}")
         return True
         
     except Exception as e:
@@ -183,20 +162,18 @@ def process_season(season_year, conn):
         return False
 
 def main():
-    conn = setup_database()
     global driver
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
     
     try:
         current_year = datetime.now().year
-        for year in range(current_year, 2007, -1):
+        for year in range(current_year, 2007, -1):  # Changed to 2022 to include 2023
             if year == 2025:  # Skip 2025 as it's not available yet
                 continue
-            process_season(year, conn)
+            process_season(year)
             
     finally:
         driver.quit()
-        conn.close()
         print("Scraping completed")
 
 if __name__ == "__main__":
