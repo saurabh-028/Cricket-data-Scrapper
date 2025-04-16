@@ -90,8 +90,10 @@ def process_match(match_url, season):
         if commentary_data:
             # Add commentary data to a subcollection
             commentary_ref = match_ref.collection('commentary')
+            commentary_data.append({'match_id': match_id})  # Add match_id reference to each entry
             batch = db.batch()
             for entry in commentary_data:
+                
                 doc_ref = commentary_ref.document()
                 batch.set(doc_ref, entry)
             
