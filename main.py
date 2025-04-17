@@ -132,7 +132,6 @@ def process_season(season_year):
         
         
         for link in series_links:
-            print(link.text)
             if "Indian Premier League" in link.text:
                 ipl_link = link.get_attribute('href')
                 break
