@@ -44,7 +44,7 @@ The fetched data includes:
 ### **2️⃣ Installation**  
 ```bash
 # Clone the repo
-git clone https://github.com/your-username/ipl-commentary-scraper.git
+git clone https://github.com/saurabh-028/Cricket-data-Scrapper.git
 cd ipl-commentary-scraper
 
 # Install dependencies
@@ -114,14 +114,7 @@ crontab -e
 
 ---
 
-## **📜 License**  
-This project is for **educational use only**.  
+**🔗 GitHub Repo:** [github.com/your-username/ipl-commentary-scraper](https://github.com/saurabh-028/Cricket-data-Scrapper.git)  
+**📧 Contact:** [your-email@example.com](mailto:saurabhshide028@gmail.com)  
 
 ---
-
-**🔗 GitHub Repo:** [github.com/your-username/ipl-commentary-scraper](https://github.com/your-username/ipl-commentary-scraper)  
-**📧 Contact:** [your-email@example.com](mailto:your-email@example.com)  
-
----
-
-*(Replace placeholder links with your actual repo/contact info.)* 🚀
